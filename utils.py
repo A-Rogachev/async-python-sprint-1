@@ -1,3 +1,7 @@
+import os
+import shutil
+
+
 CITIES = {
     "MOSCOW": "https://code.s3.yandex.net/async-module/moscow-response.json",
     "PARIS": "https://code.s3.yandex.net/async-module/paris-response.json",
@@ -18,6 +22,24 @@ CITIES = {
     "GIZA": "https://code.s3.yandex.net/async-module/giza-response.json",
     "MADRID": "https://code.s3.yandex.net/async-module/madrid-response.json",
     "TORONTO": "https://code.s3.yandex.net/async-module/toronto-response.json"
+}
+
+CITIES_NAMES_TRANSLATION: dict[str, str] = {
+    'MOSCOW': 'Москва',
+    'PARIS': 'Париж',
+    'LONDON': 'Лондон',
+    'BERLIN': 'Берлин',
+    'BEIJING': 'Пекин',
+    'KAZAN': 'Казань',
+    'SPETERSBURG': 'Санкт-Петербург',
+    'VOLGOGRAD': 'Волгоград',
+    'ROMA': 'Рим',
+    'NOVOSIBIRSK': 'Новосибирск',
+    'KALININGRAD': 'Калининград',
+    'ABUDHABI': 'Абу-Даби',
+    'WARSZAWA': 'Варшава',
+    'BUCHAREST': 'Бухарест',
+    'CAIRO': 'Каир',
 }
 
 MIN_MAJOR_PYTHON_VER = 3
@@ -43,3 +65,16 @@ def get_url_by_city_name(city_name):
         return CITIES[city_name]
     except KeyError:
         raise Exception("Please check that city {} exists".format(city_name))
+
+
+def create_new_folder(folder_name: str) -> None:
+    """
+    Создает новую папку, в случае если папка уже существует,
+    удаляет в ней файлы.
+    """
+
+    try:
+        os.mkdir(folder_name)
+    except FileExistsError:
+        shutil.rmtree(folder_name)
+        os.mkdir(folder_name)
