@@ -1,7 +1,13 @@
+import json
+import os
+import subprocess
 from concurrent.futures import ThreadPoolExecutor
-from utils import get_url_by_city_name
+from multiprocessing import Process, Queue
+from queue import Empty
 from typing import Any
-from pprint import pprint
+
+from utils import get_url_by_city_name
+
 
 class DataFetchingTask:
     """
@@ -29,7 +35,6 @@ class DataFetchingTask:
                     self.cities,
                 )
             )
-
             return all_weather_data
 
     def get_weather_data_for_one_city(
@@ -43,21 +48,49 @@ class DataFetchingTask:
             weather_data: dict[str, Any] = self.weather_api.get_forecasting(
                 url=get_url_by_city_name(city)
             )
-        except Exception as error:
-            # здесь сделать логгирование
-            # print(error)
+        except Exception:
             return city, None
         return city, weather_data
 
 
-class DataCalculationTask:
+class DataCalculationTask(Process):
     """
     Вычисление средней температуры и анализ информации о осадках за указанный
     период для всех городов.
     """
+    def __init__(self, input_queue: Queue) -> None:
+        """
+        Инициализация объекта.
+        Для работы с передаваемыми данными используется полученная очередь.
+        """
+        super().__init__()
+        self.input_queue = input_queue
 
-    # pprint(all_weather_data[0][1].get('forecasts')[0].get('hours')[23])
+    def run(self):
+        """
+        Получает данные из очереди, с помощью вызова внешнего скрипта
+        external/analyzer.py получает данные о погодных условиях и осадках.
+        """
+        while True:
+            try:
+                new_city = self.input_queue.get(timeout=1)
+            except Empty:
+                break
 
+            city_name, city_data = new_city
+            file_path = f'cities_analyses/{city_name}.json'
+
+            with open(file_path, 'w') as file:
+                json.dump(city_data, file)
+
+            subprocess.run([
+                'python',
+                './external/analyzer.py',
+                '-i',
+                file_path,
+                '-o',
+                f'analyses_done/{os.path.basename(file_path)}'
+            ])
 
 
 class DataAggregationTask:
@@ -66,3 +99,4 @@ class DataAggregationTask:
 
 class DataAnalyzingTask:
     pass
+

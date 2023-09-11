@@ -1,6 +1,8 @@
 import os
 import shutil
-
+from typing import Any
+import openpyxl
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 CITIES = {
     "MOSCOW": "https://code.s3.yandex.net/async-module/moscow-response.json",
@@ -42,9 +44,74 @@ CITIES_NAMES_TRANSLATION: dict[str, str] = {
     'CAIRO': 'Каир',
 }
 
+excel_report_table_settings: dict[str, Any] = {
+    'bold_font': Font(bold=True),
+    'thin_border': Border(
+        left=Side(style='thin', color='325180'),
+        right=Side(style='thin', color='325180'),
+        top=Side(style='thin', color='325180'),
+        bottom=Side(style='thin', color='325180'),
+    ),
+    'center_alignment': Alignment(horizontal='center'),
+    'color_fill': PatternFill(
+        start_color="C7E4E2",
+        end_color="C1E4E7",
+        fill_type="solid",
+    ),
+    'sheet_title': 'Анализ погоды',
+    'sheet_names': {
+        'A1': 'Город/день',
+        'C1': '26-05',
+        'D1': '27-05',
+        'E1': '28-05',
+        'F1': '29-05',
+        'G1': '30-05',
+        'H1': 'Среднее',
+        'I1': 'Рейтинг',
+    },
+    'first_column_width': 20,
+    'second_column_width': 25,
+}
+
 MIN_MAJOR_PYTHON_VER = 3
 MIN_MINOR_PYTHON_VER = 9
 
+
+class ReportExcelTable:
+    """
+    Класс отчета о погодных условиях в формате Excel (.xlsx).
+    """
+
+    def __init__(self, file_path: str, settings: dict[str, Any]) -> None:
+        """
+        Получение настроек для отчета в формате Excel.
+        """
+        self.file_path = file_path
+        self.thin_border = settings.get('thin_border')
+        self.bold_font = settings.get('bold_font')
+        self.center_alignment = settings.get('center_alignment')
+        self.title = settings.get('sheet_title')
+        self.sheet_names = settings.get('sheet_names')
+        self.first_column_width = settings.get('first_column_width')
+        self.second_column_width = settings.get('second_column_width')
+
+    def create_and_setup_new_excel_file(self):
+        """
+        Создает новый файл и делает базовую настройку.
+        """
+        wb: openpyxl.Workbook = openpyxl.Workbook()
+        wb.active.title = self.title
+        sheet = wb[self.title]
+
+        for key, value in self.sheet_names.items():
+            sheet[key] = value
+            sheet[key].font = self.bold_font
+            sheet[key].alignment = self.center_alignment
+        sheet.column_dimensions['A'].width = self.first_column_width
+        sheet.column_dimensions['B'].width = self.second_column_width
+    
+        wb.save(self.file_path)
+        wb.close()
 
 def check_python_version():
     import sys
@@ -67,14 +134,14 @@ def get_url_by_city_name(city_name):
         raise Exception("Please check that city {} exists".format(city_name))
 
 
-def create_new_folder(folder_name: str) -> None:
+def create_new_folders(*folder_names: tuple[str]) -> None:
     """
-    Создает новую папку, в случае если папка уже существует,
-    удаляет в ней файлы.
+    Создает новые директории; в случае если директория уже существует,
+    рекурсивно удаляет вложенные папки и файлы, также саму директорию.
     """
-
-    try:
-        os.mkdir(folder_name)
-    except FileExistsError:
-        shutil.rmtree(folder_name)
-        os.mkdir(folder_name)
+    for folder_name in folder_names:
+        try:
+            os.mkdir(str(folder_name))
+        except FileExistsError:
+            shutil.rmtree(folder_name)
+            os.mkdir(folder_name)

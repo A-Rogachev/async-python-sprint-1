@@ -6,3 +6,6 @@ __pycache__/
 .venv
 venv/
 .python-version
+analyses_done/
+cities_analyses/
+results.xlsx
