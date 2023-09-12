@@ -61,6 +61,7 @@ excel_report_table_settings: dict[str, Any] = {
     'sheet_title': 'Анализ погоды',
     'sheet_names': {
         'A1': 'Город/день',
+        'B1': '',
         'C1': '26-05',
         'D1': '27-05',
         'E1': '28-05',
@@ -82,16 +83,23 @@ class ReportExcelTable:
     Класс отчета о погодных условиях в формате Excel (.xlsx).
     """
 
-    def __init__(self, file_path: str, settings: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        file_path: str,
+        settings: dict[str, Any],
+        records_amount: int,
+    ) -> None:
         """
         Получение настроек для отчета в формате Excel.
         """
+        self.records_amount = records_amount
         self.file_path = file_path
         self.thin_border = settings.get('thin_border')
         self.bold_font = settings.get('bold_font')
         self.center_alignment = settings.get('center_alignment')
         self.title = settings.get('sheet_title')
         self.sheet_names = settings.get('sheet_names')
+        self.color_fill = settings.get('color_fill')
         self.first_column_width = settings.get('first_column_width')
         self.second_column_width = settings.get('second_column_width')
 
@@ -102,16 +110,23 @@ class ReportExcelTable:
         wb: openpyxl.Workbook = openpyxl.Workbook()
         wb.active.title = self.title
         sheet = wb[self.title]
-
         for key, value in self.sheet_names.items():
             sheet[key] = value
             sheet[key].font = self.bold_font
             sheet[key].alignment = self.center_alignment
         sheet.column_dimensions['A'].width = self.first_column_width
         sheet.column_dimensions['B'].width = self.second_column_width
-    
+
+        for i in range(3, (self.records_amount + 1) * 2, 2):
+            for cell in self.sheet_names.keys():
+                sheet[f'{cell}{i}'].fill = self.color_fill
+        for k in range(1, (self.records_amount + 1) * 2):
+            for cell in self.sheet_names.keys():
+                sheet[f'{cell}{k}'].border = self.thin_border
+
         wb.save(self.file_path)
         wb.close()
+
 
 def check_python_version():
     import sys

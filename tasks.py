@@ -1,9 +1,10 @@
 import json
 import os
 import subprocess
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from multiprocessing import Process, Queue
 from queue import Empty
+from statistics import mean
 from typing import Any
 
 from utils import get_url_by_city_name
@@ -16,7 +17,7 @@ class DataFetchingTask:
 
     def __init__(self, cities: dict[str, str], weather_api) -> None:
         """
-        Инициализация объекта.
+        Инициализация объекта задачи для сбора информации о погодных условиях.
         """
         self.cities = cities
         self.weather_api = weather_api
@@ -58,13 +59,14 @@ class DataCalculationTask(Process):
     Вычисление средней температуры и анализ информации о осадках за указанный
     период для всех городов.
     """
-    def __init__(self, input_queue: Queue) -> None:
+    def __init__(self, input_queue: Queue, path: str) -> None:
         """
         Инициализация объекта.
         Для работы с передаваемыми данными используется полученная очередь.
         """
         super().__init__()
         self.input_queue = input_queue
+        self.path = path
 
     def run(self):
         """
@@ -79,7 +81,6 @@ class DataCalculationTask(Process):
 
             city_name, city_data = new_city
             file_path = f'cities_analyses/{city_name}.json'
-
             with open(file_path, 'w') as file:
                 json.dump(city_data, file)
 
@@ -89,14 +90,152 @@ class DataCalculationTask(Process):
                 '-i',
                 file_path,
                 '-o',
-                f'analyses_done/{os.path.basename(file_path)}'
+                f'{self.path}{os.path.basename(file_path)}'
             ])
 
 
-class DataAggregationTask:
-    pass
-
-
 class DataAnalyzingTask:
-    pass
+    """
+    Для анализа данных и выявления средней температуры и количества часов
+    без осадков за полный период.
+    """
 
+    def __init__(self, file_dir, output_dict):
+        """
+        Инициализация задачи для расчета рейтинга города.
+        """
+        self.output_dict = output_dict
+        self.file_paths = [
+            os.path.join(file_dir, file) for file in os.listdir(file_dir)
+        ]
+
+    def rate_data(self):
+        """
+        В словарь добавляется запись с коэффициентом для города.
+        """
+        with ThreadPoolExecutor() as pool:
+            results = [
+                pool.submit(self.count_rate_for_city, file_path)
+                for file_path
+                in self.file_paths
+            ]
+            for future in as_completed(results):
+                file_path, avg_temp, avg_cond_hours, rating = future.result()
+                self.output_dict[file_path] = (avg_temp, avg_cond_hours, rating)
+
+    def count_rate_for_city(self, file_path):
+        """
+        Добавление записи в словарь для расчета рейтинга.
+        """
+        with open(file_path, 'r') as file:
+            days_data = json.load(file).get('days')
+            common_temp_avg: float = round(
+                mean(
+                    day.get('temp_avg')
+                    for day in days_data
+                    if day and day.get('temp_avg')
+                ), 1
+            )
+            common_relevant_cond_hours: float = round(
+                mean(
+                    day.get('relevant_cond_hours')
+                    for day in days_data
+                    if day and day.get('relevant_cond_hours')
+                ), 1
+            )
+            return (
+                file_path,
+                common_temp_avg,
+                common_relevant_cond_hours,
+                round(common_temp_avg * common_relevant_cond_hours),
+            )
+
+
+class DataAggregationTask:
+    """
+    Формирование отчета о погодных условиях.
+    """
+    def __init__(self, file_dir, dict_with_rates):
+        """
+        Инициализация задачи для формирования отчета.
+        """
+        self.file_paths = [
+            os.path.join(file_dir, file) for file in os.listdir(file_dir)
+        ]
+        self.dict_with_rates = dict_with_rates
+        self.final_ratings = []
+        self.results = []
+
+    def aggregate_data(self):
+        """
+        Агрегация данных для записи в отчет.
+        """
+        with ThreadPoolExecutor() as pool:
+            results = [
+                pool.submit(self.get_data_tuple_for_city, file_path)
+                for file_path
+                in self.file_paths
+            ]
+            for future in as_completed(results):
+                self.results.append(future.result())
+        return self.results
+    
+    def get_data_tuple_for_city(self, file_path):
+        """
+        Получение данных о погодных условиях для одного города.
+        """
+        with open(file_path, 'r') as file:
+            file_data = json.load(file).get('days')
+            avg_temp, avg_days, rating = self.dict_with_rates[file_path]
+            return (
+                (
+                    file.name.removeprefix('analyses_done/').removesuffix('.json'),
+                    'Температура, среднее',
+                    *(day.get('temp_avg') for day in file_data),
+                    avg_temp,
+                    rating,
+                ),
+                (
+                    '',
+                    'Без осадков, часов',
+                    *(day.get('relevant_cond_hours') for day in file_data),
+                    avg_days,
+                    '',
+                ),
+            )
+
+    def write_report(self, excel_file_path):
+        """
+        Записывает построчно данные в отчет excel.
+        """
+
+    # with open(excel_report_table, 'w') as excel_file:
+    #     for i, file in enumerate(os.listdir('analyses_done')):
+    #         with open(f'analyses_done/{file}', 'r') as file:
+    #             data = json.load(file)
+    #             name = file.name.removeprefix('analyses_done/').removesuffix('.json')
+    #             name = CITIES_NAMES_TRANSLATION[name]
+    #             sheet[f'A{i + 2 + i}'] = name
+    #             sheet[f'B{i + 2 + i}'] = 'Температура, среднее'
+    #             sheet[f'B{i + 3 + i}'] = 'Без осадков, часов'
+    #             days_data = data.get('days')
+
+    #             columns = ['C', 'D', 'E', 'F', 'G']
+    #             for j, day_data in enumerate(days_data):
+    #                 sheet[f'{columns[j]}{i + 2 + i}'] = day_data.get('temp_avg')
+    #                 sheet[f'{columns[j]}{i + 3 + i}'] = day_data.get('relevant_cond_hours')
+    #                 sheet[f'{columns[j]}{i + 2 + i}'].alignment = excel_report_table_settings.get('center_alignment')
+    #                 sheet[f'{columns[j]}{i + 3 + i}'].alignment = excel_report_table_settings.get('center_alignment')
+    #             sheet[f'H{i + 2 + i}'] = round(mean(data.get('temp_avg') for data in days_data if data.get('temp_avg')), 1)
+    #             sheet[f'H{i + 3 + i}'] = round(mean(data.get('relevant_cond_hours') for data in days_data if data.get('relevant_cond_hours')), 1)
+    #             rates[name] = sheet[f'H{i + 2 + i}'].value * sheet[f'H{i + 3 + i}'].value
+    #         i += 1
+
+    #     # здесь задача 4
+    #     ratings = sorted(rates.values(), key=lambda x: x)
+    #     for key in rates:
+    #         rates[key] = ratings.index(rates[key]) + 1
+    #     # print(rates)
+
+    #     for y in range(2, 32, 2):
+    #         sheet[f'I{y}'] = rates[sheet[f'A{y}'].value]
