@@ -4,53 +4,37 @@ import logging
 from dataclasses import dataclass, field
 from functools import reduce
 from operator import getitem
-from typing import Optional, List, Dict
+from typing import Any, Dict, List, Optional
 
-PATH_FROM_INPUT = "./../examples/response.json"
-PATH_TO_OUTPUT = "./../examples/output.json"
+PATH_FROM_INPUT = './../examples/response.json'
+PATH_TO_OUTPUT = './../examples/output.json'
 
-INPUT_FORECAST_PATH = "forecasts"
-INPUT_DATE_PATH = "date"
+INPUT_FORECAST_PATH = 'forecasts'
+INPUT_DATE_PATH = 'date'
 
-INPUT_HOURS_PATH = "hours"
-INPUT_HOUR_PATH = "hour"
-INPUT_TEMPERATURE_PATH = "temp"
-INPUT_CONDITION_PATH = "condition"
+INPUT_HOURS_PATH = 'hours'
+INPUT_HOUR_PATH = 'hour'
+INPUT_TEMPERATURE_PATH = 'temp'
+INPUT_CONDITION_PATH = 'condition'
 INPUT_DAY_HOURS_START = 9
 INPUT_DAY_HOURS_END = 19
-INPUT_DAY_SUITABLE_CONDITIONS = [
-    "clear",
-    "partly-cloudy",
-    "cloudy",
-    "overcast",
-    # "drizzle",
-    # "light-rain",
-    # "rain",
-    # "moderate-rain",
-    # "heavy-rain",
-    # "continuous-heavy-rain",
-    # "showers",
-    # "wet-snow",
-    # "light-snow",
-    # "snow",
-    # "snow-showers",
-    # "hail",
-    # "thunderstorm",
-    # "thunderstorm-with-rain",
-    # "thunderstorm-with-hail"
-]
+INPUT_DAY_SUITABLE_CONDITIONS = {
+    'clear',
+    'partly-cloudy',
+    'cloudy',
+    'overcast',
+}
 
-OUTPUT_RAW_DATA_KEY = "raw_data"
-OUTPUT_DAYS_KEY = "days"
-DEFAULT_OUTPUT_RESULT = {
+OUTPUT_RAW_DATA_KEY = 'raw_data'
+OUTPUT_DAYS_KEY = 'days'
+DEFAULT_OUTPUT_RESULT: dict[str, list[Any]] = {
     OUTPUT_DAYS_KEY: [],
-    # OUTPUT_RAW_DATA_KEY: None,
 }
 
 
 def deep_getitem(obj, path: str):
     try:
-        return reduce(getitem, path.split(">"), obj)
+        return reduce(getitem, path.split('>'), obj)
     except (KeyError, TypeError):
         return None
 
@@ -62,7 +46,7 @@ def load_data(input_path: str = PATH_FROM_INPUT):
 
 
 def dump_data(data, output_path: str = PATH_TO_OUTPUT):
-    with open(output_path, mode="w") as file:
+    with open(output_path, mode='w') as file:
         formatted_data = json.dumps(data, indent=2)
         file.write(formatted_data)
 
@@ -70,20 +54,20 @@ def dump_data(data, output_path: str = PATH_TO_OUTPUT):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-i",
-        "--input",
+        '-i',
+        '--input',
         default=PATH_FROM_INPUT,
         type=str,
-        help="path to file with input data",
+        help='path to file with input data',
     )
     parser.add_argument(
-        "-o",
-        "--output",
+        '-o',
+        '--output',
         default=PATH_TO_OUTPUT,
         type=str,
-        help="path to file with result",
+        help='path to file with result',
     )
-    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument('-v', '--verbose', action='store_true')
     return parser.parse_args()
 
 
@@ -97,7 +81,9 @@ class HourInfo:
     @staticmethod
     def is_hour_suitable(data):
         hour = int(data[INPUT_HOUR_PATH])
-        return (hour >= INPUT_DAY_HOURS_START) and (hour <= INPUT_DAY_HOURS_END)
+        return (
+            hour >= INPUT_DAY_HOURS_START
+        ) and (hour <= INPUT_DAY_HOURS_END)
 
     @property
     def is_cond_suitable(self):
@@ -111,14 +97,23 @@ class HourInfo:
             return
 
         self.hour = int(self.raw_data[INPUT_HOUR_PATH])
-        self.temperature = int(deep_getitem(self.raw_data, INPUT_TEMPERATURE_PATH))
+        self.temperature = int(
+            deep_getitem(
+                self.raw_data,
+                INPUT_TEMPERATURE_PATH,
+            )
+        )
         self.condition = deep_getitem(self.raw_data, INPUT_CONDITION_PATH)
 
 
 @dataclass
 class DayInfo:
     raw_data: Dict[str, tuple[str, int]] = field(repr=False)
-    hours: Optional[List[HourInfo]] = field(init=False, repr=False, default=None)
+    hours: Optional[List[HourInfo]] = field(
+        init=False,
+        repr=False,
+        default=None,
+    )
 
     date: Optional[str] = field(init=False, default=None)
     hour_start: Optional[int] = field(init=False, default=None)
@@ -130,14 +125,14 @@ class DayInfo:
 
     def to_json(self):
         return {
-            "date": self.date,
-            "hours_start": self.hour_start,
-            "hours_end": self.hour_end,
-            "hours_count": self.hours_count,
-            "temp_avg": round(self.temperature_avg, 3)
+            'date': self.date,
+            'hours_start': self.hour_start,
+            'hours_end': self.hour_end,
+            'hours_count': self.hours_count,
+            'temp_avg': round(self.temperature_avg, 3)
             if self.temperature_avg
             else self.temperature_avg,
-            "relevant_cond_hours": self.relevant_condition_hours,
+            'relevant_cond_hours': self.relevant_condition_hours,
         }
 
     def __post_init__(self):
@@ -154,7 +149,7 @@ class DayInfo:
         conds_count = 0
 
         self.hours = self.raw_data[INPUT_HOURS_PATH]
-        # ToDo force sort by hour key in asc mode
+        # TODO: force sort by hour key in asc mode
         for hour_data in self.hours:
             if not HourInfo.is_hour_suitable(hour_data):
                 continue
@@ -177,16 +172,16 @@ class DayInfo:
 
 def analyze_json(data):
     if not data:
-        logging.warning("Input data is empty...")
+        logging.warning('Input data is empty...')
         return {}
 
-    # analyzing days
+    # NOTE: analyzing days
     time_start = None
     time_end = None
 
     days_data = deep_getitem(data, INPUT_FORECAST_PATH)
     days = []
-    # ToDo force sort by day in asc mode
+    # TODO: force sort by day in asc mode
     for day_data in days_data:
         d_info = DayInfo(raw_data=day_data)
         d_date = d_info.date
@@ -197,18 +192,19 @@ def analyze_json(data):
         days.append(d_info.to_json())
 
     result = DEFAULT_OUTPUT_RESULT
-    # result[OUTPUT_RAW_DATA_KEY] = data
     result[OUTPUT_DAYS_KEY] = days
     return result
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     args = parse_args()
     input_path = args.input
     output_path = args.output
     verbose_mode = args.verbose
 
-    logging.basicConfig(level=logging.DEBUG if verbose_mode else logging.WARNING)
+    logging.basicConfig(
+        level=logging.DEBUG if verbose_mode else logging.WARNING
+    )
     logging.info(args)
 
     data = load_data(input_path)

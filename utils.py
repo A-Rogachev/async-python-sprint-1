@@ -1,29 +1,78 @@
 import os
 import shutil
 from typing import Any
+
 import openpyxl
+import requests
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-CITIES = {
-    "MOSCOW": "https://code.s3.yandex.net/async-module/moscow-response.json",
-    "PARIS": "https://code.s3.yandex.net/async-module/paris-response.json",
-    "LONDON": "https://code.s3.yandex.net/async-module/london-response.json",
-    "BERLIN": "https://code.s3.yandex.net/async-module/berlin-response.json",
-    "BEIJING": "https://code.s3.yandex.net/async-module/beijing-response.json",
-    "KAZAN": "https://code.s3.yandex.net/async-module/kazan-response.json",
-    "SPETERSBURG": "https://code.s3.yandex.net/async-module/spetersburg-response.json",
-    "VOLGOGRAD": "https://code.s3.yandex.net/async-module/volgograd-response.json",
-    "NOVOSIBIRSK": "https://code.s3.yandex.net/async-module/novosibirsk-response.json",
-    "KALININGRAD": "https://code.s3.yandex.net/async-module/kaliningrad-response.json",
-    "ABUDHABI": "https://code.s3.yandex.net/async-module/abudhabi-response.json",
-    "WARSZAWA": "https://code.s3.yandex.net/async-module/warszawa-response.json",
-    "BUCHAREST": "https://code.s3.yandex.net/async-module/bucharest-response.json",
-    "ROMA": "https://code.s3.yandex.net/async-module/roma-response.json",
-    "CAIRO": "https://code.s3.yandex.net/async-module/cairo-response.json",
 
-    "GIZA": "https://code.s3.yandex.net/async-module/giza-response.json",
-    "MADRID": "https://code.s3.yandex.net/async-module/madrid-response.json",
-    "TORONTO": "https://code.s3.yandex.net/async-module/toronto-response.json"
+def internet_connection_is_available() -> bool:
+    """
+    Проверка подключения к интернету.
+    """
+    try:
+        requests.get('https://google.com')
+        return True
+    except Exception:
+        return False
+
+
+CITIES = {
+    'MOSCOW': (
+        'https://code.s3.yandex.net/async-module/moscow-response.json'
+    ),
+    'PARIS': (
+        'https://code.s3.yandex.net/async-module/paris-response.json'
+    ),
+    'LONDON': (
+        'https://code.s3.yandex.net/async-module/london-response.json'
+    ),
+    'BERLIN': (
+        'https://code.s3.yandex.net/async-module/berlin-response.json'
+    ),
+    'BEIJING': (
+        'https://code.s3.yandex.net/async-module/beijing-response.json'
+    ),
+    'KAZAN': (
+        'https://code.s3.yandex.net/async-module/kazan-response.json'
+    ),
+    'SPETERSBURG': (
+        'https://code.s3.yandex.net/async-module/spetersburg-response.json'
+    ),
+    'VOLGOGRAD': (
+        'https://code.s3.yandex.net/async-module/volgograd-response.json'
+    ),
+    'NOVOSIBIRSK': (
+        'https://code.s3.yandex.net/async-module/novosibirsk-response.json'
+    ),
+    'KALININGRAD': (
+        'https://code.s3.yandex.net/async-module/kaliningrad-response.json'
+    ),
+    'ABUDHABI': (
+        'https://code.s3.yandex.net/async-module/abudhabi-response.json'
+    ),
+    'WARSZAWA': (
+        'https://code.s3.yandex.net/async-module/warszawa-response.json'
+    ),
+    'BUCHAREST': (
+        'https://code.s3.yandex.net/async-module/bucharest-response.json'
+    ),
+    'ROMA': (
+        'https://code.s3.yandex.net/async-module/roma-response.json'
+    ),
+    'CAIRO': (
+        'https://code.s3.yandex.net/async-module/cairo-response.json'
+    ),
+    'GIZA': (
+        'https://code.s3.yandex.net/async-module/giza-response.json'
+    ),
+    'MADRID': (
+        'https://code.s3.yandex.net/async-module/madrid-response.json'
+    ),
+    'TORONTO': (
+        'https://code.s3.yandex.net/async-module/toronto-response.json'
+    ),
 }
 
 CITIES_NAMES_TRANSLATION: dict[str, str] = {
@@ -44,6 +93,7 @@ CITIES_NAMES_TRANSLATION: dict[str, str] = {
     'CAIRO': 'Каир',
 }
 
+
 excel_report_table_settings: dict[str, Any] = {
     'bold_font': Font(bold=True),
     'thin_border': Border(
@@ -54,9 +104,9 @@ excel_report_table_settings: dict[str, Any] = {
     ),
     'center_alignment': Alignment(horizontal='center'),
     'color_fill': PatternFill(
-        start_color="C7E4E2",
-        end_color="C1E4E7",
-        fill_type="solid",
+        start_color='C7E4E2',
+        end_color='C1E4E7',
+        fill_type='solid',
     ),
     'sheet_title': 'Анализ погоды',
     'sheet_names': {
@@ -92,18 +142,24 @@ class ReportExcelTable:
         """
         Получение настроек для отчета в формате Excel.
         """
-        self.records_amount = records_amount
-        self.file_path = file_path
-        self.thin_border = settings.get('thin_border')
-        self.bold_font = settings.get('bold_font')
-        self.center_alignment = settings.get('center_alignment')
-        self.title = settings.get('sheet_title')
-        self.sheet_names = settings.get('sheet_names')
-        self.color_fill = settings.get('color_fill')
-        self.first_column_width = settings.get('first_column_width')
-        self.second_column_width = settings.get('second_column_width')
+        self.records_amount: int = records_amount
+        self.file_path: str = file_path
+        self.thin_border: Border | None = settings.get('thin_border')
+        self.bold_font: Font | None = settings.get('bold_font')
+        self.center_alignment: Alignment | None = settings.get(
+            'center_alignment'
+        )
+        self.title: Any = settings.get('sheet_title')
+        self.sheet_names: dict[str, Any] | Any = settings.get('sheet_names')
+        self.color_fill: PatternFill | None = settings.get('color_fill')
+        self.first_column_width: int | None = settings.get(
+            'first_column_width'
+        )
+        self.second_column_width: int | None = settings.get(
+            'second_column_width'
+        )
 
-    def create_and_setup_new_excel_file(self):
+    def create_and_setup_new_excel_file(self) -> None:
         """
         Создает новый файл и делает базовую настройку.
         """
@@ -136,7 +192,7 @@ def check_python_version():
         or sys.version_info.minor < MIN_MINOR_PYTHON_VER
     ):
         raise Exception(
-            "Please use python version >= {}.{}".format(
+            'Please use python version >= {}.{}'.format(
                 MIN_MAJOR_PYTHON_VER, MIN_MINOR_PYTHON_VER
             )
         )
@@ -146,10 +202,10 @@ def get_url_by_city_name(city_name):
     try:
         return CITIES[city_name]
     except KeyError:
-        raise Exception("Please check that city {} exists".format(city_name))
+        raise Exception('Please check that city {} exists'.format(city_name))
 
 
-def create_new_folders(*folder_names: tuple[str]) -> None:
+def create_new_folders(folder_names: tuple[str, ...]) -> None:
     """
     Создает новые директории; в случае если директория уже существует,
     рекурсивно удаляет вложенные папки и файлы, также саму директорию.

@@ -9,3 +9,4 @@ venv/
 analyses_done/
 cities_analyses/
 results.xlsx
+.mypy_cache
