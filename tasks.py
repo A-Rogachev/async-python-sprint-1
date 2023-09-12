@@ -7,7 +7,9 @@ from queue import Empty
 from statistics import mean
 from typing import Any
 
-from utils import get_url_by_city_name
+import openpyxl
+
+from utils import get_url_by_city_name, CITIES_NAMES_TRANSLATION
 
 
 class DataFetchingTask:
@@ -155,15 +157,25 @@ class DataAggregationTask:
     """
     Формирование отчета о погодных условиях.
     """
-    def __init__(self, file_dir, dict_with_rates):
+    def __init__(self, file_dir, dict_with_rates, report_path):
         """
         Инициализация задачи для формирования отчета.
         """
+        self.excel_file_path = report_path
         self.file_paths = [
             os.path.join(file_dir, file) for file in os.listdir(file_dir)
         ]
         self.dict_with_rates = dict_with_rates
-        self.final_ratings = []
+        self.final_rating = [
+            (city, rating) for city, (avg_temp, avg_cond_hours, rating) in self.dict_with_rates.items()
+        ]
+        self.rating_indexes = sorted(
+            [
+                rating 
+                for _, (_, _, rating) 
+                in self.dict_with_rates.items()
+            ]
+        )
         self.results = []
 
     def aggregate_data(self):
@@ -178,7 +190,7 @@ class DataAggregationTask:
             ]
             for future in as_completed(results):
                 self.results.append(future.result())
-        return self.results
+        self.write_report(self.excel_file_path, self.results)
     
     def get_data_tuple_for_city(self, file_path):
         """
@@ -186,14 +198,14 @@ class DataAggregationTask:
         """
         with open(file_path, 'r') as file:
             file_data = json.load(file).get('days')
-            avg_temp, avg_days, rating = self.dict_with_rates[file_path]
+            avg_temp, avg_days, rating_coeff = self.dict_with_rates[file_path]
             return (
                 (
-                    file.name.removeprefix('analyses_done/').removesuffix('.json'),
+                    CITIES_NAMES_TRANSLATION.get(old_name := file.name.removeprefix('analyses_done/').removesuffix('.json'), old_name),
                     'Температура, среднее',
                     *(day.get('temp_avg') for day in file_data),
                     avg_temp,
-                    rating,
+                    self.rating_indexes.index(rating_coeff),
                 ),
                 (
                     '',
@@ -204,32 +216,22 @@ class DataAggregationTask:
                 ),
             )
 
-    def write_report(self, excel_file_path):
+    @staticmethod
+    def write_report(excel_file_path, results):
         """
         Записывает построчно данные в отчет excel.
         """
+        workbook = openpyxl.load_workbook(excel_file_path)
+        sheet = workbook.active
+        final_results = (
+            result for data_result in results for result in data_result 
+        )
+        for row_num, data_tuple in enumerate(final_results, 2):
+            for col_num, value in enumerate(data_tuple, 1):
+                sheet.cell(row=row_num, column=col_num).value = value
 
-    # with open(excel_report_table, 'w') as excel_file:
-    #     for i, file in enumerate(os.listdir('analyses_done')):
-    #         with open(f'analyses_done/{file}', 'r') as file:
-    #             data = json.load(file)
-    #             name = file.name.removeprefix('analyses_done/').removesuffix('.json')
-    #             name = CITIES_NAMES_TRANSLATION[name]
-    #             sheet[f'A{i + 2 + i}'] = name
-    #             sheet[f'B{i + 2 + i}'] = 'Температура, среднее'
-    #             sheet[f'B{i + 3 + i}'] = 'Без осадков, часов'
-    #             days_data = data.get('days')
-
-    #             columns = ['C', 'D', 'E', 'F', 'G']
-    #             for j, day_data in enumerate(days_data):
-    #                 sheet[f'{columns[j]}{i + 2 + i}'] = day_data.get('temp_avg')
-    #                 sheet[f'{columns[j]}{i + 3 + i}'] = day_data.get('relevant_cond_hours')
-    #                 sheet[f'{columns[j]}{i + 2 + i}'].alignment = excel_report_table_settings.get('center_alignment')
-    #                 sheet[f'{columns[j]}{i + 3 + i}'].alignment = excel_report_table_settings.get('center_alignment')
-    #             sheet[f'H{i + 2 + i}'] = round(mean(data.get('temp_avg') for data in days_data if data.get('temp_avg')), 1)
-    #             sheet[f'H{i + 3 + i}'] = round(mean(data.get('relevant_cond_hours') for data in days_data if data.get('relevant_cond_hours')), 1)
-    #             rates[name] = sheet[f'H{i + 2 + i}'].value * sheet[f'H{i + 3 + i}'].value
-    #         i += 1
+        workbook.save(excel_file_path)
+        workbook.close()
 
     #     # здесь задача 4
     #     ratings = sorted(rates.values(), key=lambda x: x)

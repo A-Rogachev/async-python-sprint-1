@@ -118,10 +118,10 @@ class ReportExcelTable:
         sheet.column_dimensions['B'].width = self.second_column_width
 
         for i in range(3, (self.records_amount + 1) * 2, 2):
-            for cell in self.sheet_names.keys():
+            for cell in (key[0] for key in self.sheet_names.keys()):
                 sheet[f'{cell}{i}'].fill = self.color_fill
         for k in range(1, (self.records_amount + 1) * 2):
-            for cell in self.sheet_names.keys():
+            for cell in (key[0] for key in self.sheet_names.keys()):
                 sheet[f'{cell}{k}'].border = self.thin_border
 
         wb.save(self.file_path)

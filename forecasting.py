@@ -75,11 +75,13 @@ def forecast_weather():
     data_aggregation_task = DataAggregationTask(
         file_dir=completed_data_file_dir,
         dict_with_rates=rates,
+        report_path=excel_file_path,
     )
     answer: str = data_aggregation_task.aggregate_data()
     shutil.rmtree('analyses_done')
     # data_aggregation_task.write_report(excel_file_path)
     logging.info('Формирование отчета завершено.')
+
     # logging.info(
     #     'Формирование отчета завершено.'
     #     f'Наиболее благоприятные города для посещения: {answer}'
