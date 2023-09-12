@@ -15,6 +15,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
 )
 
+
 def forecast_weather():
     """
     Анализ погодных условий по городам.
@@ -79,13 +80,11 @@ def forecast_weather():
     )
     answer: str = data_aggregation_task.aggregate_data()
     shutil.rmtree('analyses_done')
-    # data_aggregation_task.write_report(excel_file_path)
-    logging.info('Формирование отчета завершено.')
-
-    # logging.info(
-    #     'Формирование отчета завершено.'
-    #     f'Наиболее благоприятные города для посещения: {answer}'
-    # )
+    logging.info('Временные файлы успешно удалены')
+    logging.info(
+        'Формирование отчета завершено. '
+        f'Наиболее благоприятные города для посещения: {", ".join(answer)}.'
+    )
 
 
 if __name__ == "__main__":

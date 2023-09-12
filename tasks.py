@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures._base import Future
 from multiprocessing import Process, Queue
 from queue import Empty
 from statistics import mean
@@ -9,7 +10,7 @@ from typing import Any
 
 import openpyxl
 
-from utils import get_url_by_city_name, CITIES_NAMES_TRANSLATION
+from utils import CITIES_NAMES_TRANSLATION, get_url_by_city_name
 
 
 class DataFetchingTask:
@@ -31,7 +32,7 @@ class DataFetchingTask:
         """
         Получение данных.
         """
-        with ThreadPoolExecutor(max_workers=None) as pool:
+        with ThreadPoolExecutor(max_workers) as pool:
             all_weather_data = tuple(
                 pool.map(
                     self.get_weather_data_for_one_city,
@@ -123,27 +124,36 @@ class DataAnalyzingTask:
             ]
             for future in as_completed(results):
                 file_path, avg_temp, avg_cond_hours, rating = future.result()
-                self.output_dict[file_path] = (avg_temp, avg_cond_hours, rating)
+                self.output_dict[file_path] = (
+                    avg_temp,
+                    avg_cond_hours,
+                    rating,
+                )
 
-    def count_rate_for_city(self, file_path):
+    def count_rate_for_city(
+        self,
+        file_path: str,
+    ) -> tuple[str, float, float, int]:
         """
         Добавление записи в словарь для расчета рейтинга.
         """
         with open(file_path, 'r') as file:
-            days_data = json.load(file).get('days')
+            days_data: list[dict[str, Any]] = json.load(file).get('days')
             common_temp_avg: float = round(
                 mean(
                     day.get('temp_avg')
                     for day in days_data
-                    if day and day.get('temp_avg')
-                ), 1
+                    if day.get('temp_avg')
+                ),
+                ndigits=1,
             )
             common_relevant_cond_hours: float = round(
                 mean(
                     day.get('relevant_cond_hours')
                     for day in days_data
-                    if day and day.get('relevant_cond_hours')
-                ), 1
+                    if day.get('relevant_cond_hours')
+                ),
+                ndigits=1,
             )
             return (
                 file_path,
@@ -157,74 +167,106 @@ class DataAggregationTask:
     """
     Формирование отчета о погодных условиях.
     """
-    def __init__(self, file_dir, dict_with_rates, report_path):
+    def __init__(
+        self,
+        file_dir: str,
+        dict_with_rates: dict[str, tuple[float, float, int]],
+        report_path: str,
+    ) -> None:
         """
         Инициализация задачи для формирования отчета.
         """
-        self.excel_file_path = report_path
-        self.file_paths = [
+        self.excel_file_path: str = report_path
+        self.file_paths: list[str] = [
             os.path.join(file_dir, file) for file in os.listdir(file_dir)
         ]
         self.dict_with_rates = dict_with_rates
-        self.final_rating = [
-            (city, rating) for city, (avg_temp, avg_cond_hours, rating) in self.dict_with_rates.items()
-        ]
-        self.rating_indexes = sorted(
+        self.rating_indexes: list[int] = sorted(
             [
-                rating 
-                for _, (_, _, rating) 
+                rating
+                for _, (_, _, rating)
                 in self.dict_with_rates.items()
-            ]
+            ],
+            reverse=True,
         )
-        self.results = []
+        self.results_for_report = []
+        self.answer: list[str] = []
 
-    def aggregate_data(self):
+    def aggregate_data(self) -> list[str]:
         """
-        Агрегация данных для записи в отчет.
+        Агрегация и запись полученных данных в файл отчета.
         """
         with ThreadPoolExecutor() as pool:
-            results = [
+            results: list[Future] = [
                 pool.submit(self.get_data_tuple_for_city, file_path)
                 for file_path
                 in self.file_paths
             ]
             for future in as_completed(results):
-                self.results.append(future.result())
-        self.write_report(self.excel_file_path, self.results)
-    
-    def get_data_tuple_for_city(self, file_path):
+                self.results_for_report.append(future.result())
+        self.write_report(self.excel_file_path, self.results_for_report)
+        print(self.answer)
+        return self.answer
+
+    def get_data_tuple_for_city(self, file_path: str) -> None:
         """
         Получение данных о погодных условиях для одного города.
         """
         with open(file_path, 'r') as file:
-            file_data = json.load(file).get('days')
-            avg_temp, avg_days, rating_coeff = self.dict_with_rates[file_path]
+            file_data: list[dict[str, Any]] = json.load(file).get('days')
+            avg_temp, avg_days, rating_coeff = self.dict_with_rates[
+                file_path
+            ]
+            translated_name: str = CITIES_NAMES_TRANSLATION.get(
+                city_name := file.name.removeprefix(
+                    'analyses_done/'
+                ).removesuffix('.json'),
+                city_name,
+            )
+            rating_value: int = self.rating_indexes.index(rating_coeff)
+            self.check_city_best_for_travel(rating_coeff, translated_name)
             return (
                 (
-                    CITIES_NAMES_TRANSLATION.get(old_name := file.name.removeprefix('analyses_done/').removesuffix('.json'), old_name),
+                    translated_name,
                     'Температура, среднее',
                     *(day.get('temp_avg') for day in file_data),
                     avg_temp,
-                    self.rating_indexes.index(rating_coeff),
+                    rating_value + 1,
                 ),
                 (
                     '',
                     'Без осадков, часов',
-                    *(day.get('relevant_cond_hours') for day in file_data),
+                    *(
+                        day.get('relevant_cond_hours')
+                        for day
+                        in file_data
+                    ),
                     avg_days,
                     '',
                 ),
             )
 
+    def check_city_best_for_travel(
+        self,
+        rating_coeff: int,
+        translated_name: str,
+    ) -> None:
+        """
+        Проверяет, является ли город благоприятным для посещения.
+        """
+        if rating_coeff == max(self.rating_indexes):
+            self.answer.append(translated_name)
+
     @staticmethod
-    def write_report(excel_file_path, results):
+    def write_report(excel_file_path: str, results: tuple[Any]) -> None:
         """
         Записывает построчно данные в отчет excel.
         """
         workbook = openpyxl.load_workbook(excel_file_path)
         sheet = workbook.active
+
         final_results = (
-            result for data_result in results for result in data_result 
+            result for data_result in results for result in data_result
         )
         for row_num, data_tuple in enumerate(final_results, 2):
             for col_num, value in enumerate(data_tuple, 1):
@@ -232,12 +274,3 @@ class DataAggregationTask:
 
         workbook.save(excel_file_path)
         workbook.close()
-
-    #     # здесь задача 4
-    #     ratings = sorted(rates.values(), key=lambda x: x)
-    #     for key in rates:
-    #         rates[key] = ratings.index(rates[key]) + 1
-    #     # print(rates)
-
-    #     for y in range(2, 32, 2):
-    #         sheet[f'I{y}'] = rates[sheet[f'A{y}'].value]
